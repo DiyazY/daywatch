@@ -29,9 +29,7 @@ class BlockStatus(Enum):
 
 
 # Matches: - [ ] 8:00 - 9:30 Some label  OR  - [x] 08:00 - 11:00 Some label
-TIME_BLOCK_RE = re.compile(
-    r"^- \[(x| )\]\s+(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})\s+(.+)$"
-)
+TIME_BLOCK_RE = re.compile(r"^- \[(x| )\]\s+(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})\s+(.+)$")
 
 # Matches indented subtasks: \t- [ ] subtask label  OR  \t- [x] subtask label
 SUBTASK_RE = re.compile(r"^\s+- \[(x| )\]\s+(.+)$")
@@ -194,10 +192,7 @@ def parse_daily_plan(content: str, plan_date: date | None = None) -> DailyPlan:
             current_section = "time_tracking"
             current_block = None
             continue
-        elif (
-            lower.startswith("## day planner")
-            or lower.startswith("# day planner")
-        ):
+        elif lower.startswith("## day planner") or lower.startswith("# day planner"):
             current_section = "planner"
             current_block = None
             continue

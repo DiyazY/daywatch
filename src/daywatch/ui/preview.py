@@ -59,19 +59,6 @@ def format_plan_summary(plan: DailyPlan, now: time | None = None) -> str:
     return "\n".join(lines)
 
 
-def format_tray_menu_items(
-    plan: DailyPlan, now: time | None = None
-) -> list[str]:
-    """Return a list of strings for use as tray menu items.
-
-    Each item is a formatted block line. This is used by the tray
-    module to build the pystray menu.
-    """
-    if now is None:
-        now = datetime.now().time()
-    return [format_block_line(block, now) for block in plan.blocks]
-
-
 def format_status_line(plan: DailyPlan, now: time | None = None) -> str:
     """One-line status for use in status bars (polybar, waybar, etc.).
 

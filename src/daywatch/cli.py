@@ -63,7 +63,10 @@ def run(ctx: click.Context) -> None:
 
     if not cfg.vault.path:
         click.echo("Error: No vault path configured.", err=True)
-        click.echo(f"Run 'daywatch config' to set up your config at {DEFAULT_CONFIG_PATH}", err=True)
+        click.echo(
+            f"Run 'daywatch config' to set up your config at {DEFAULT_CONFIG_PATH}",
+            err=True,
+        )
         sys.exit(1)
 
     if not cfg.vault.vault_path.exists():
@@ -77,7 +80,13 @@ def run(ctx: click.Context) -> None:
 
 
 @main.command()
-@click.option("--vault", "-p", type=click.Path(), required=True, help="Path to your vault/markdown folder.")
+@click.option(
+    "--vault",
+    "-p",
+    type=click.Path(),
+    required=True,
+    help="Path to your vault/markdown folder.",
+)
 @click.pass_context
 def init(ctx: click.Context, vault: str) -> None:
     """Bootstrap templates and folder structure in your vault."""

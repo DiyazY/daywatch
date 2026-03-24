@@ -1,9 +1,6 @@
 """Tests for the notification scheduler."""
 
 from datetime import date, datetime, time, timedelta
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from daywatch.parser import DailyPlan, TimeBlock
 from daywatch.scheduler import Scheduler
@@ -13,8 +10,15 @@ def _make_plan(blocks: list[TimeBlock]) -> DailyPlan:
     return DailyPlan(date=date.today(), blocks=blocks)
 
 
-def _block(start_h: int, start_m: int, end_h: int, end_m: int, label: str,
-           completed: bool = False, failed: bool = False) -> TimeBlock:
+def _block(
+    start_h: int,
+    start_m: int,
+    end_h: int,
+    end_m: int,
+    label: str,
+    completed: bool = False,
+    failed: bool = False,
+) -> TimeBlock:
     return TimeBlock(
         start=time(start_h, start_m),
         end=time(end_h, end_m),
@@ -32,9 +36,13 @@ class TestScheduler:
         future = (now + timedelta(minutes=30)).time()
         future_end = (now + timedelta(minutes=90)).time()
 
-        plan = _make_plan([
-            _block(future.hour, future.minute, future_end.hour, future_end.minute, "future task"),
-        ])
+        plan = _make_plan(
+            [
+                _block(
+                    future.hour, future.minute, future_end.hour, future_end.minute, "future task"
+                ),
+            ]
+        )
 
         scheduler = Scheduler(lead_time_minutes=5, notify_on_start=True)
         count = scheduler.update(plan)
@@ -50,10 +58,18 @@ class TestScheduler:
         future = (now + timedelta(minutes=30)).time()
         future_end = (now + timedelta(minutes=90)).time()
 
-        plan = _make_plan([
-            _block(future.hour, future.minute, future_end.hour, future_end.minute,
-                   "done task", completed=True),
-        ])
+        plan = _make_plan(
+            [
+                _block(
+                    future.hour,
+                    future.minute,
+                    future_end.hour,
+                    future_end.minute,
+                    "done task",
+                    completed=True,
+                ),
+            ]
+        )
 
         scheduler = Scheduler(lead_time_minutes=5)
         count = scheduler.update(plan)
@@ -67,10 +83,18 @@ class TestScheduler:
         future = (now + timedelta(minutes=30)).time()
         future_end = (now + timedelta(minutes=90)).time()
 
-        plan = _make_plan([
-            _block(future.hour, future.minute, future_end.hour, future_end.minute,
-                   "failed task", failed=True),
-        ])
+        plan = _make_plan(
+            [
+                _block(
+                    future.hour,
+                    future.minute,
+                    future_end.hour,
+                    future_end.minute,
+                    "failed task",
+                    failed=True,
+                ),
+            ]
+        )
 
         scheduler = Scheduler(lead_time_minutes=5)
         count = scheduler.update(plan)
@@ -80,9 +104,11 @@ class TestScheduler:
 
     def test_skips_past_blocks(self):
         """Should not schedule notifications for blocks that already passed."""
-        plan = _make_plan([
-            _block(0, 0, 0, 30, "past task"),
-        ])
+        plan = _make_plan(
+            [
+                _block(0, 0, 0, 30, "past task"),
+            ]
+        )
 
         scheduler = Scheduler(lead_time_minutes=5)
         count = scheduler.update(plan)
@@ -96,9 +122,11 @@ class TestScheduler:
         future = (now + timedelta(minutes=30)).time()
         future_end = (now + timedelta(minutes=90)).time()
 
-        plan = _make_plan([
-            _block(future.hour, future.minute, future_end.hour, future_end.minute, "task"),
-        ])
+        plan = _make_plan(
+            [
+                _block(future.hour, future.minute, future_end.hour, future_end.minute, "task"),
+            ]
+        )
 
         scheduler = Scheduler(lead_time_minutes=5)
         scheduler.update(plan)
@@ -113,9 +141,13 @@ class TestScheduler:
         future = (now + timedelta(minutes=30)).time()
         future_end = (now + timedelta(minutes=90)).time()
 
-        plan = _make_plan([
-            _block(future.hour, future.minute, future_end.hour, future_end.minute, "muted task"),
-        ])
+        plan = _make_plan(
+            [
+                _block(
+                    future.hour, future.minute, future_end.hour, future_end.minute, "muted task"
+                ),
+            ]
+        )
 
         scheduler = Scheduler(lead_time_minutes=5)
         scheduler.mute_block("muted task")
@@ -130,9 +162,11 @@ class TestScheduler:
         future = (now + timedelta(minutes=30)).time()
         future_end = (now + timedelta(minutes=90)).time()
 
-        plan = _make_plan([
-            _block(future.hour, future.minute, future_end.hour, future_end.minute, "task"),
-        ])
+        plan = _make_plan(
+            [
+                _block(future.hour, future.minute, future_end.hour, future_end.minute, "task"),
+            ]
+        )
 
         scheduler = Scheduler(lead_time_minutes=5)
         scheduler.update(plan)
@@ -151,9 +185,11 @@ class TestScheduler:
         future = (now + timedelta(minutes=30)).time()
         future_end = (now + timedelta(minutes=90)).time()
 
-        plan = _make_plan([
-            _block(future.hour, future.minute, future_end.hour, future_end.minute, "task"),
-        ])
+        plan = _make_plan(
+            [
+                _block(future.hour, future.minute, future_end.hour, future_end.minute, "task"),
+            ]
+        )
 
         scheduler = Scheduler(lead_time_minutes=5, notify_on_start=False)
         count = scheduler.update(plan)

@@ -11,7 +11,7 @@ import threading
 from datetime import datetime, time, timedelta
 from typing import Callable
 
-from daywatch.parser import BlockStatus, DailyPlan, TimeBlock
+from daywatch.parser import DailyPlan, TimeBlock
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,7 @@ def _time_to_datetime(t: time, base_date: datetime | None = None) -> datetime:
     """Convert a time object to a datetime using today's date."""
     if base_date is None:
         base_date = datetime.now()
-    return base_date.replace(
-        hour=t.hour, minute=t.minute, second=0, microsecond=0
-    )
+    return base_date.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
 
 
 def _send_notification(title: str, message: str, sound: bool = True) -> None:

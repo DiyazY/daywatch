@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from datetime import date, datetime, time
+from datetime import date, datetime
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw
 from daywatch.config import Config, load_config
 from daywatch.parser import DailyPlan, parse_file
 from daywatch.scheduler import Scheduler
-from daywatch.ui.preview import format_block_line, format_tray_menu_items
+from daywatch.ui.preview import format_block_line
 from daywatch.watcher import PlanWatcher
 
 logger = logging.getLogger(__name__)
@@ -132,9 +132,7 @@ class DayWatchTray:
 
             items.append(pystray.Menu.SEPARATOR)
         else:
-            items.append(
-                pystray.MenuItem("No plan for today", None, enabled=False)
-            )
+            items.append(pystray.MenuItem("No plan for today", None, enabled=False))
             items.append(pystray.Menu.SEPARATOR)
 
         # Actions
@@ -153,9 +151,7 @@ class DayWatchTray:
             self._tray.icon = _create_icon(no_plan=True)
         else:
             active = self.plan.current_block(now) is not None
-            self._tray.icon = _create_icon(
-                progress=self.plan.progress, active=active
-            )
+            self._tray.icon = _create_icon(progress=self.plan.progress, active=active)
 
         self._tray.menu = self._build_menu()
 

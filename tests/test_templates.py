@@ -1,9 +1,6 @@
 """Tests for the template system."""
 
 from datetime import date
-from pathlib import Path
-
-import pytest
 
 from daywatch.config import Config, VaultConfig
 from daywatch.templates import _resolve_variables, create_plan, init_vault

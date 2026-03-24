@@ -7,7 +7,6 @@ import pytest
 from daywatch.parser import (
     BlockStatus,
     DailyPlan,
-    SubTask,
     TimeBlock,
     extract_failed_items,
     parse_daily_plan,
@@ -138,43 +137,61 @@ class TestBlockStatus:
 
     def test_completed_status(self):
         block = TimeBlock(
-            start=time(8, 0), end=time(9, 0),
-            label="test", completed=True, failed=False,
+            start=time(8, 0),
+            end=time(9, 0),
+            label="test",
+            completed=True,
+            failed=False,
         )
         assert block.status(time(8, 30)) == BlockStatus.COMPLETED
 
     def test_active_status(self):
         block = TimeBlock(
-            start=time(8, 0), end=time(9, 0),
-            label="test", completed=False, failed=False,
+            start=time(8, 0),
+            end=time(9, 0),
+            label="test",
+            completed=False,
+            failed=False,
         )
         assert block.status(time(8, 30)) == BlockStatus.ACTIVE
 
     def test_upcoming_status(self):
         block = TimeBlock(
-            start=time(14, 0), end=time(15, 0),
-            label="test", completed=False, failed=False,
+            start=time(14, 0),
+            end=time(15, 0),
+            label="test",
+            completed=False,
+            failed=False,
         )
         assert block.status(time(10, 0)) == BlockStatus.UPCOMING
 
     def test_missed_status(self):
         block = TimeBlock(
-            start=time(8, 0), end=time(9, 0),
-            label="test", completed=False, failed=False,
+            start=time(8, 0),
+            end=time(9, 0),
+            label="test",
+            completed=False,
+            failed=False,
         )
         assert block.status(time(10, 0)) == BlockStatus.MISSED
 
     def test_failed_status(self):
         block = TimeBlock(
-            start=time(8, 0), end=time(9, 0),
-            label="test", completed=False, failed=True,
+            start=time(8, 0),
+            end=time(9, 0),
+            label="test",
+            completed=False,
+            failed=True,
         )
         assert block.status(time(10, 0)) == BlockStatus.FAILED
 
     def test_duration(self):
         block = TimeBlock(
-            start=time(9, 0), end=time(11, 30),
-            label="test", completed=False, failed=False,
+            start=time(9, 0),
+            end=time(11, 30),
+            label="test",
+            completed=False,
+            failed=False,
         )
         assert block.duration_minutes == 150
 

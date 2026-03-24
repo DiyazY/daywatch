@@ -76,9 +76,7 @@ class Config:
     display: DisplayConfig = field(default_factory=DisplayConfig)
     general: GeneralConfig = field(default_factory=GeneralConfig)
 
-    def resolve_daily_plan_path(
-        self, year: int, month: int, day: int
-    ) -> Path:
+    def resolve_daily_plan_path(self, year: int, month: int, day: int) -> Path:
         """Resolve the path to a daily plan file for a given date."""
         pattern = self.vault.daily_plan_pattern
         resolved = (
@@ -88,9 +86,7 @@ class Config:
         )
         return self.vault.vault_path / resolved
 
-    def resolve_weekly_plan_path(
-        self, year: int, month: int, week: int
-    ) -> Path:
+    def resolve_weekly_plan_path(self, year: int, month: int, week: int) -> Path:
         """Resolve the path to a weekly plan file."""
         pattern = self.vault.weekly_plan_pattern
         resolved = (
@@ -103,10 +99,7 @@ class Config:
     def resolve_monthly_plan_path(self, year: int, month: int) -> Path:
         """Resolve the path to a monthly plan file."""
         pattern = self.vault.monthly_plan_pattern
-        resolved = (
-            pattern.replace("{YYYY}", str(year))
-            .replace("{MM}", f"{month:02d}")
-        )
+        resolved = pattern.replace("{YYYY}", str(year)).replace("{MM}", f"{month:02d}")
         return self.vault.vault_path / resolved
 
     def resolve_yearly_plan_path(self, year: int) -> Path:
@@ -143,9 +136,7 @@ def load_config(path: Path | None = None) -> Config:
             path=v.get("path", config.vault.path),
             daily_plan_pattern=v.get("daily_plan_pattern", config.vault.daily_plan_pattern),
             weekly_plan_pattern=v.get("weekly_plan_pattern", config.vault.weekly_plan_pattern),
-            monthly_plan_pattern=v.get(
-                "monthly_plan_pattern", config.vault.monthly_plan_pattern
-            ),
+            monthly_plan_pattern=v.get("monthly_plan_pattern", config.vault.monthly_plan_pattern),
             yearly_plan_pattern=v.get("yearly_plan_pattern", config.vault.yearly_plan_pattern),
         )
 
@@ -153,9 +144,7 @@ def load_config(path: Path | None = None) -> Config:
     if "notifications" in data:
         n = data["notifications"]
         config.notifications = NotificationConfig(
-            lead_time_minutes=n.get(
-                "lead_time_minutes", config.notifications.lead_time_minutes
-            ),
+            lead_time_minutes=n.get("lead_time_minutes", config.notifications.lead_time_minutes),
             notify_on_start=n.get("notify_on_start", config.notifications.notify_on_start),
             sound=n.get("sound", config.notifications.sound),
         )
@@ -195,7 +184,7 @@ def save_default_config(path: Path | None = None) -> Path:
 
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    default_toml = '''\
+    default_toml = """\
 [vault]
 # Path to your Obsidian vault or markdown folder
 path = ""
@@ -217,6 +206,6 @@ theme = "auto"  # "light", "dark", "auto"
 
 [general]
 launch_at_login = false
-'''
+"""
     path.write_text(default_toml, encoding="utf-8")
     return path
