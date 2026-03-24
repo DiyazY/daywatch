@@ -1,0 +1,190 @@
+"""CLI entry point for DayWatch.
+
+Commands:
+    daywatch run       Start the tray application (default)
+    daywatch init      Bootstrap templates and folder structure
+    daywatch new       Create a new plan from template
+    daywatch config    Open or create the config file
+    daywatch status    Print today's progress (for scripts/status bars)
+"""
+
+from __future__ import annotations
+
+import logging
+import subprocess
+import sys
+from datetime import date, datetime
+from pathlib import Path
+
+import click
+
+from daywatch import __version__
+from daywatch.config import (
+    DEFAULT_CONFIG_PATH,
+    load_config,
+    save_default_config,
+)
+
+
+@click.group(invoke_without_command=True)
+@click.version_option(version=__version__, prog_name="daywatch")
+@click.option("--config", "-c", type=click.Path(), default=None, help="Path to config file.")
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+@click.pass_context
+def main(ctx: click.Context, config: str | None, verbose: bool) -> None:
+    """DayWatch — Daily Plan Notifier.
+
+    A lightweight tray app that reads time-blocked markdown plans
+    and sends native notifications when it's time to switch tasks.
+    """
+    # Setup logging
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    # Store config path in context
+    ctx.ensure_object(dict)
+    ctx.obj["config_path"] = Path(config) if config else None
+
+    # Default to 'run' if no subcommand given
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(run)
+
+
+@main.command()
+@click.pass_context
+def run(ctx: click.Context) -> None:
+    """Start the DayWatch tray application."""
+    config_path = ctx.obj.get("config_path")
+    cfg = load_config(config_path)
+
+    if not cfg.vault.path:
+        click.echo("Error: No vault path configured.", err=True)
+        click.echo(f"Run 'daywatch config' to set up your config at {DEFAULT_CONFIG_PATH}", err=True)
+        sys.exit(1)
+
+    if not cfg.vault.vault_path.exists():
+        click.echo(f"Error: Vault path does not exist: {cfg.vault.path}", err=True)
+        sys.exit(1)
+
+    from daywatch.tray import DayWatchTray
+
+    app = DayWatchTray(config=cfg)
+    app.run()
+
+
+@main.command()
+@click.option("--vault", "-p", type=click.Path(), required=True, help="Path to your vault/markdown folder.")
+@click.pass_context
+def init(ctx: click.Context, vault: str) -> None:
+    """Bootstrap templates and folder structure in your vault."""
+    from daywatch.config import Config, VaultConfig
+    from daywatch.templates import init_vault
+
+    vault_path = Path(vault).expanduser().resolve()
+
+    cfg = Config(vault=VaultConfig(path=str(vault_path)))
+    actions = init_vault(cfg)
+
+    click.echo(f"Initialized DayWatch in: {vault_path}\n")
+    for action in actions:
+        click.echo(f"  • {action}")
+
+    # Save/update config
+    config_path = ctx.obj.get("config_path") or DEFAULT_CONFIG_PATH
+    save_default_config(config_path)
+
+    # Update vault path in config
+    if config_path.exists():
+        content = config_path.read_text()
+        content = content.replace('path = ""', f'path = "{vault_path}"')
+        config_path.write_text(content)
+        click.echo(f"\nConfig saved to: {config_path}")
+
+
+@main.command("new")
+@click.argument("plan_type", type=click.Choice(["daily", "weekly", "monthly", "yearly"]))
+@click.argument("target_date", required=False, default=None)
+@click.pass_context
+def new_plan(ctx: click.Context, plan_type: str, target_date: str | None) -> None:
+    """Create a new plan file from a template.
+
+    PLAN_TYPE is one of: daily, weekly, monthly, yearly.
+    TARGET_DATE is optional (e.g., 2026-03-25). Defaults to today.
+    """
+    from daywatch.templates import create_plan
+
+    config_path = ctx.obj.get("config_path")
+    cfg = load_config(config_path)
+
+    if not cfg.vault.path:
+        click.echo("Error: No vault path configured. Run 'daywatch init' first.", err=True)
+        sys.exit(1)
+
+    # Parse target date
+    if target_date:
+        try:
+            parsed = datetime.strptime(target_date, "%Y-%m-%d").date()
+        except ValueError:
+            click.echo(f"Error: Invalid date format '{target_date}'. Use YYYY-MM-DD.", err=True)
+            sys.exit(1)
+    else:
+        parsed = date.today()
+
+    result = create_plan(plan_type, cfg, parsed)
+
+    if result:
+        click.echo(f"Created: {result}")
+    else:
+        click.echo(f"Already exists. No file created for {plan_type} ({parsed}).")
+
+
+@main.command()
+@click.pass_context
+def config(ctx: click.Context) -> None:
+    """Open or create the DayWatch config file."""
+    config_path = ctx.obj.get("config_path") or DEFAULT_CONFIG_PATH
+    path = save_default_config(config_path)
+    click.echo(f"Config file: {path}")
+
+    # Try to open in $EDITOR
+    import os
+
+    editor = os.environ.get("EDITOR", os.environ.get("VISUAL"))
+    if editor:
+        click.echo(f"Opening in {editor}...")
+        subprocess.run([editor, str(path)])
+    else:
+        click.echo("Set $EDITOR to auto-open, or edit the file manually.")
+
+
+@main.command()
+@click.pass_context
+def status(ctx: click.Context) -> None:
+    """Print today's progress (for scripts, polybar, waybar, etc.)."""
+    from daywatch.parser import parse_file
+    from daywatch.ui.preview import format_status_line
+
+    config_path = ctx.obj.get("config_path")
+    cfg = load_config(config_path)
+
+    if not cfg.vault.path:
+        click.echo("DW: no config")
+        return
+
+    today = date.today()
+    plan_path = cfg.resolve_daily_plan_path(today.year, today.month, today.day)
+
+    if not plan_path.exists():
+        click.echo("DW: no plan")
+        return
+
+    plan = parse_file(plan_path)
+    click.echo(format_status_line(plan))
+
+
+if __name__ == "__main__":
+    main()

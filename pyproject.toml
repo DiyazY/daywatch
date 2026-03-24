@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "daywatch"
+version = "0.1.0"
+description = "A lightweight, cross-platform desktop tray app that reads time-blocked markdown plans and sends native notifications."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Diyaz Yakubov", email = "diyaz.yakubov@toptop.dev" },
+]
+keywords = ["obsidian", "productivity", "notifications", "daily-planner", "tray-app"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Scheduling",
+]
+dependencies = [
+    "pystray>=0.19",
+    "Pillow>=10.0",
+    "watchdog>=3.0",
+    "plyer>=2.1",
+    "tomli>=2.0; python_version < '3.11'",
+    "click>=8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1",
+]
+
+[project.scripts]
+daywatch = "daywatch.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/DiyazY/daywatch"
+Repository = "https://github.com/DiyazY/daywatch"
+Issues = "https://github.com/DiyazY/daywatch/issues"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
