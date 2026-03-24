@@ -59,7 +59,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e .
-          pip install pyinstaller
+          pip install pyinstaller~=6.0
 
       - name: Build binary
         shell: bash
