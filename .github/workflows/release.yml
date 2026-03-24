@@ -42,7 +42,7 @@ jobs:
           - os: ubuntu-latest
             artifact_name: daywatch-linux-amd64
             binary_ext: ""
-          - os: macos-latest
+          - os: macos-14
             artifact_name: daywatch-macos-arm64
             binary_ext: ""
           - os: windows-latest
@@ -85,13 +85,16 @@ jobs:
 
       - name: Rename binary
         shell: bash
+        env:
+          BINARY_EXT: ${{ matrix.binary_ext }}
+          ARTIFACT_NAME: ${{ matrix.artifact_name }}
         run: |
           mkdir -p release
-          if [ "${{ matrix.binary_ext }}" = ".exe" ]; then
-            mv dist/daywatch.exe "release/${{ matrix.artifact_name }}.exe"
+          if [ "$BINARY_EXT" = ".exe" ]; then
+            mv dist/daywatch.exe "release/${ARTIFACT_NAME}.exe"
           else
-            mv dist/daywatch "release/${{ matrix.artifact_name }}"
-            chmod +x "release/${{ matrix.artifact_name }}"
+            mv dist/daywatch "release/${ARTIFACT_NAME}"
+            chmod +x "release/${ARTIFACT_NAME}"
           fi
 
       - name: Upload artifact
