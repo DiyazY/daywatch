@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: |
+          ruff check src/ tests/
+          ruff format --check src/ tests/
+
+      - name: Test
+        run: pytest -v --tb=short
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: lint-and-test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: daywatch-linux-amd64
+            binary_ext: ""
+          - os: macos-latest
+            artifact_name: daywatch-macos-arm64
+            binary_ext: ""
+          - os: windows-latest
+            artifact_name: daywatch-windows-amd64
+            binary_ext: ".exe"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install pyinstaller
+
+      - name: Build binary
+        shell: bash
+        run: |
+          # PyInstaller --add-data uses ":" on Unix, ";" on Windows
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            SEP=";"
+          else
+            SEP=":"
+          fi
+          pyinstaller \
+            --name daywatch \
+            --onefile \
+            --windowed \
+            --add-data "src/daywatch/default_templates${SEP}daywatch/default_templates" \
+            --hidden-import pystray._darwin \
+            --hidden-import pystray._linux \
+            --hidden-import pystray._win32 \
+            --hidden-import plyer.platforms.linux.notification \
+            --hidden-import plyer.platforms.macosx.notification \
+            --hidden-import plyer.platforms.win.notification \
+            src/daywatch/__main__.py
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          mkdir -p release
+          if [ "${{ matrix.binary_ext }}" = ".exe" ]; then
+            mv dist/daywatch.exe "release/${{ matrix.artifact_name }}.exe"
+          else
+            mv dist/daywatch "release/${{ matrix.artifact_name }}"
+            chmod +x "release/${{ matrix.artifact_name }}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release/
+          retention-days: 5
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          # Flatten artifacts into release-assets/
+          for dir in artifacts/*/; do
+            cp "$dir"* release-assets/ 2>/dev/null || true
+          done
+          ls -la release-assets/
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release-assets/*
+          fail_on_unmatched_files: false

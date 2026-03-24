@@ -59,9 +59,7 @@ def format_plan_summary(plan: DailyPlan, now: time | None = None) -> str:
     return "\n".join(lines)
 
 
-def format_tray_menu_items(
-    plan: DailyPlan, now: time | None = None
-) -> list[str]:
+def format_tray_menu_items(plan: DailyPlan, now: time | None = None) -> list[str]:
     """Return a list of strings for use as tray menu items.
 
     Each item is a formatted block line. This is used by the tray

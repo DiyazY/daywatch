@@ -8,7 +8,7 @@ by placing custom versions in their vault's templates/ folder.
 from __future__ import annotations
 
 import importlib.resources
-from datetime import date, datetime, timedelta
+from datetime import date
 from pathlib import Path
 
 from daywatch.config import Config
@@ -142,13 +142,9 @@ def create_plan(
         )
     elif plan_type == "weekly":
         week_num = target_date.isocalendar()[1]
-        output_path = config.resolve_weekly_plan_path(
-            target_date.year, target_date.month, week_num
-        )
+        output_path = config.resolve_weekly_plan_path(target_date.year, target_date.month, week_num)
     elif plan_type == "monthly":
-        output_path = config.resolve_monthly_plan_path(
-            target_date.year, target_date.month
-        )
+        output_path = config.resolve_monthly_plan_path(target_date.year, target_date.month)
     elif plan_type == "yearly":
         output_path = config.resolve_yearly_plan_path(target_date.year)
     else:
