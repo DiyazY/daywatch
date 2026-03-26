@@ -1,12 +1,15 @@
 """Notification scheduler for DayWatch.
 
 Maintains a schedule of upcoming notifications based on parsed time blocks.
-Fires native desktop notifications via plyer at the right moments.
+Fires native desktop notifications at the right moments using platform-specific
+commands (osascript on macOS, notify-send on Linux, PowerShell on Windows).
 """
 
 from __future__ import annotations
 
 import logging
+import subprocess
+import sys
 import threading
 from datetime import datetime, time, timedelta
 from typing import Callable
@@ -23,17 +26,58 @@ def _time_to_datetime(t: time, base_date: datetime | None = None) -> datetime:
     return base_date.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
 
 
-def _send_notification(title: str, message: str, sound: bool = True) -> None:
-    """Send a native OS notification via plyer."""
-    try:
-        from plyer import notification
+def _applescript_quote(s: str) -> str:
+    """Escape a string for use in an AppleScript literal."""
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
-        notification.notify(
-            title=title,
-            message=message,
-            app_name="DayWatch",
-            timeout=10,
-        )
+
+def _ps_escape(s: str) -> str:
+    """Escape a string for PowerShell single-quoted context."""
+    return s.replace("'", "''")
+
+
+def _send_notification(title: str, message: str, sound: bool = True) -> None:
+    """Send a native OS notification using platform-specific commands."""
+    try:
+        if sys.platform == "darwin":
+            script = (
+                f"display notification {_applescript_quote(message)}"
+                f" with title {_applescript_quote(title)}"
+            )
+            if sound:
+                script += ' sound name "default"'
+            subprocess.Popen(
+                ["osascript", "-e", script],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        elif sys.platform == "win32":
+            ps_script = (
+                "[Windows.UI.Notifications.ToastNotificationManager,"
+                " Windows.UI.Notifications, ContentType = WindowsRuntime]"
+                " | Out-Null\n"
+                "$t = [Windows.UI.Notifications.ToastNotificationManager]::"
+                "GetTemplateContent("
+                "[Windows.UI.Notifications.ToastTemplateType]::ToastText02)\n"
+                "$n = $t.GetElementsByTagName('text')\n"
+                f"$n.Item(0).AppendChild($t.CreateTextNode('{_ps_escape(title)}'))"
+                " | Out-Null\n"
+                f"$n.Item(1).AppendChild($t.CreateTextNode('{_ps_escape(message)}'))"
+                " | Out-Null\n"
+                "$toast = [Windows.UI.Notifications.ToastNotification]::new($t)\n"
+                "[Windows.UI.Notifications.ToastNotificationManager]::"
+                "CreateToastNotifier('DayWatch').Show($toast)"
+            )
+            subprocess.Popen(
+                ["powershell", "-Command", ps_script],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            cmd = ["notify-send", title, message]
+            if not sound:
+                cmd.extend(["--hint", "int:suppress-sound:1"])
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception as e:
         logger.warning("Failed to send notification: %s", e)
 

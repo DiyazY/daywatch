@@ -11,9 +11,11 @@ Commands:
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 from datetime import date, datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import click
@@ -24,6 +26,47 @@ from daywatch.config import (
     load_config,
     save_default_config,
 )
+
+
+def _get_log_dir() -> Path:
+    """Return the platform-appropriate log directory."""
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Logs" / "daywatch"
+    elif sys.platform == "win32":
+        local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
+        return Path(local) / "daywatch" / "logs"
+    else:
+        state = os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))
+        return Path(state) / "daywatch"
+
+
+def _setup_logging(verbose: bool) -> None:
+    """Configure logging: always to file (INFO), optionally to console."""
+    fmt = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # File handler: always INFO level, 5 MB max, 3 backups
+    log_dir = _get_log_dir()
+    log_dir.mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        log_dir / "daywatch.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(fmt)
+
+    # Console handler: DEBUG if verbose, WARNING otherwise
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.setLevel(logging.DEBUG if verbose else logging.WARNING)
+    console_handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S")
+    )
+
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    root.addHandler(file_handler)
+    root.addHandler(console_handler)
 
 
 @click.group(invoke_without_command=True)
@@ -37,13 +80,7 @@ def main(ctx: click.Context, config: str | None, verbose: bool) -> None:
     A lightweight tray app that reads time-blocked markdown plans
     and sends native notifications when it's time to switch tasks.
     """
-    # Setup logging
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    _setup_logging(verbose)
 
     # Store config path in context
     ctx.ensure_object(dict)
@@ -160,8 +197,6 @@ def config(ctx: click.Context) -> None:
     click.echo(f"Config file: {path}")
 
     # Try to open in $EDITOR
-    import os
-
     editor = os.environ.get("EDITOR", os.environ.get("VISUAL"))
     if editor:
         click.echo(f"Opening in {editor}...")

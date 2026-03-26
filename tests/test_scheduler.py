@@ -1,9 +1,10 @@
 """Tests for the notification scheduler."""
 
 from datetime import date, datetime, time, timedelta
+from unittest.mock import patch
 
 from daywatch.parser import DailyPlan, TimeBlock
-from daywatch.scheduler import Scheduler
+from daywatch.scheduler import Scheduler, _send_notification
 
 
 def _make_plan(blocks: list[TimeBlock]) -> DailyPlan:
@@ -291,3 +292,59 @@ class TestScheduler:
 
         assert count == 0
         scheduler.cancel_all()
+
+
+class TestSendNotification:
+    @patch("daywatch.scheduler.sys")
+    @patch("daywatch.scheduler.subprocess.Popen")
+    def test_macos_uses_osascript(self, mock_popen, mock_sys):
+        """On macOS, should call osascript."""
+        mock_sys.platform = "darwin"
+        _send_notification("Test Title", "Test message")
+        mock_popen.assert_called_once()
+        args = mock_popen.call_args[0][0]
+        assert args[0] == "osascript"
+        assert "-e" in args
+
+    @patch("daywatch.scheduler.sys")
+    @patch("daywatch.scheduler.subprocess.Popen")
+    def test_linux_uses_notify_send(self, mock_popen, mock_sys):
+        """On Linux, should call notify-send."""
+        mock_sys.platform = "linux"
+        _send_notification("Test Title", "Test message")
+        mock_popen.assert_called_once()
+        args = mock_popen.call_args[0][0]
+        assert args[0] == "notify-send"
+
+    @patch("daywatch.scheduler.sys")
+    @patch("daywatch.scheduler.subprocess.Popen")
+    def test_windows_uses_powershell(self, mock_popen, mock_sys):
+        """On Windows, should call powershell."""
+        mock_sys.platform = "win32"
+        _send_notification("Test Title", "Test message")
+        mock_popen.assert_called_once()
+        args = mock_popen.call_args[0][0]
+        assert args[0] == "powershell"
+
+    @patch("daywatch.scheduler.sys")
+    @patch("daywatch.scheduler.subprocess.Popen")
+    def test_macos_sound_included_by_default(self, mock_popen, mock_sys):
+        """macOS notification should include sound by default."""
+        mock_sys.platform = "darwin"
+        _send_notification("Title", "Msg", sound=True)
+        script = mock_popen.call_args[0][0][2]
+        assert "sound name" in script
+
+    @patch("daywatch.scheduler.sys")
+    @patch("daywatch.scheduler.subprocess.Popen")
+    def test_macos_no_sound(self, mock_popen, mock_sys):
+        """macOS notification with sound=False should omit sound."""
+        mock_sys.platform = "darwin"
+        _send_notification("Title", "Msg", sound=False)
+        script = mock_popen.call_args[0][0][2]
+        assert "sound name" not in script
+
+    @patch("daywatch.scheduler.subprocess.Popen", side_effect=FileNotFoundError("no cmd"))
+    def test_handles_missing_command(self, mock_popen):
+        """Should log warning, not crash, when notification command is missing."""
+        _send_notification("Title", "Msg")  # Should not raise

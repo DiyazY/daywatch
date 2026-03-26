@@ -7,6 +7,7 @@ re-parsing and notification rescheduling.
 from __future__ import annotations
 
 import logging
+import time as _time
 from pathlib import Path
 from typing import Callable
 
@@ -14,6 +15,8 @@ from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileSystemEvent
 from watchdog.observers import Observer
 
 logger = logging.getLogger(__name__)
+
+_DEBOUNCE_SECONDS = 2.0
 
 
 class PlanFileHandler(FileSystemEventHandler):
@@ -23,12 +26,18 @@ class PlanFileHandler(FileSystemEventHandler):
         super().__init__()
         self.watch_path = watch_path.resolve()
         self.on_change = on_change
+        self._last_handled: float = 0.0
 
     def _handle_event(self, event) -> None:
         if event.is_directory:
             return
         changed = Path(event.src_path).resolve()
         if changed == self.watch_path:
+            now = _time.monotonic()
+            if now - self._last_handled < _DEBOUNCE_SECONDS:
+                logger.debug("Debounced file event for: %s", changed)
+                return
+            self._last_handled = now
             logger.info("Plan file changed: %s", changed)
             self.on_change(changed)
 

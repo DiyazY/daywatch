@@ -78,9 +78,6 @@ jobs:
             --hidden-import pystray._darwin \
             --hidden-import pystray._linux \
             --hidden-import pystray._win32 \
-            --hidden-import plyer.platforms.linux.notification \
-            --hidden-import plyer.platforms.macosx.notification \
-            --hidden-import plyer.platforms.win.notification \
             src/daywatch/__main__.py
 
       - name: Rename binary
