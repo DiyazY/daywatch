@@ -35,11 +35,32 @@ DayWatch lives in your system tray and watches your daily plan files (plain mark
 
 ## Installation
 
+### From GitHub Releases (no Python needed)
+
+Download the latest binary for your platform from [Releases](https://github.com/DiyazY/daywatch/releases).
+
+**macOS:**
+```bash
+chmod +x daywatch-macos-arm64
+xattr -d com.apple.quarantine daywatch-macos-arm64
+mv daywatch-macos-arm64 /usr/local/bin/daywatch
+```
+
+**Linux:**
+```bash
+chmod +x daywatch-linux-amd64
+mv daywatch-linux-amd64 /usr/local/bin/daywatch
+```
+
+**Windows:** Move `daywatch-windows-amd64.exe` to a folder on your `PATH`, or just run it directly.
+
+### From PyPI
+
 ```bash
 pip install daywatch
 ```
 
-Or from source:
+### From source
 
 ```bash
 git clone https://github.com/DiyazY/daywatch.git

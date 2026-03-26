@@ -196,3 +196,98 @@ class TestScheduler:
 
         assert count == 1  # Only lead notification
         scheduler.cancel_all()
+
+    def test_active_block_fires_immediate_notification(self):
+        """Mid-block startup should fire an immediate 'active' notification."""
+        import time as _time
+
+        notifications = []
+
+        def capture(title, message):
+            notifications.append((title, message))
+
+        now = datetime.now()
+        start = (now - timedelta(minutes=30)).time()
+        end = (now + timedelta(minutes=30)).time()
+
+        plan = _make_plan([_block(start.hour, start.minute, end.hour, end.minute, "active task")])
+
+        scheduler = Scheduler(lead_time_minutes=5, on_notification=capture)
+        count = scheduler.update(plan)
+
+        assert count >= 1
+        _time.sleep(0.3)  # Wait for the 0.1s timer to fire
+
+        assert len(notifications) >= 1
+        assert "Active" in notifications[0][0]
+        scheduler.cancel_all()
+
+    def test_missed_lead_fires_immediate(self):
+        """Lead time passed but block not started should fire lead notification immediately."""
+        import time as _time
+
+        notifications = []
+
+        def capture(title, message):
+            notifications.append((title, message))
+
+        now = datetime.now()
+        # Block starts 3 min from now, lead_time is 5 min => lead was 2 min ago
+        start = (now + timedelta(minutes=3)).time()
+        end = (now + timedelta(minutes=63)).time()
+
+        plan = _make_plan([_block(start.hour, start.minute, end.hour, end.minute, "upcoming task")])
+
+        scheduler = Scheduler(lead_time_minutes=5, on_notification=capture)
+        count = scheduler.update(plan)
+
+        # Should have: 1 immediate lead + 1 future start = at least 2
+        assert count >= 2
+        _time.sleep(0.3)
+
+        # The immediate lead notification should have fired
+        assert len(notifications) >= 1
+        assert "upcoming task" in notifications[0][1] or "upcoming task" in notifications[0][0]
+        scheduler.cancel_all()
+
+    def test_active_block_skips_start_notification(self):
+        """Active block should only get 'active' notification, not 'now starting'."""
+        import time as _time
+
+        notifications = []
+
+        def capture(title, message):
+            notifications.append((title, message))
+
+        now = datetime.now()
+        start = (now - timedelta(minutes=15)).time()
+        end = (now + timedelta(minutes=45)).time()
+
+        plan = _make_plan([_block(start.hour, start.minute, end.hour, end.minute, "task")])
+
+        scheduler = Scheduler(lead_time_minutes=5, on_notification=capture)
+        count = scheduler.update(plan)
+
+        assert count == 1  # Only the active notification
+        _time.sleep(0.3)
+
+        assert len(notifications) == 1
+        assert "Active" in notifications[0][0]
+        assert "Now" not in notifications[0][0]
+        scheduler.cancel_all()
+
+    def test_completed_active_block_skipped(self):
+        """A block that is active in time but marked completed gets no notifications."""
+        now = datetime.now()
+        start = (now - timedelta(minutes=15)).time()
+        end = (now + timedelta(minutes=45)).time()
+
+        plan = _make_plan(
+            [_block(start.hour, start.minute, end.hour, end.minute, "done", completed=True)]
+        )
+
+        scheduler = Scheduler(lead_time_minutes=5)
+        count = scheduler.update(plan)
+
+        assert count == 0
+        scheduler.cancel_all()

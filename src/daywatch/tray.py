@@ -69,6 +69,7 @@ class DayWatchTray:
     def __init__(self, config: Config | None = None) -> None:
         self.config = config or load_config()
         self.plan: DailyPlan | None = None
+        self._current_date: date = date.today()
         self.scheduler = Scheduler(
             lead_time_minutes=self.config.notifications.lead_time_minutes,
             notify_on_start=self.config.notifications.notify_on_start,
@@ -171,11 +172,11 @@ class DayWatchTray:
         # Load today's plan
         self._load_plan()
 
-        # Start file watcher
+        # Start file watcher (always, even if file doesn't exist yet)
         plan_path = self._get_today_plan_path()
-        if plan_path.exists():
-            self.watcher = PlanWatcher(plan_path, self._on_file_change)
-            self.watcher.start()
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        self.watcher = PlanWatcher(plan_path, self._on_file_change)
+        self.watcher.start()
 
         # Create tray icon
         icon_img = _create_icon(
@@ -198,6 +199,31 @@ class DayWatchTray:
             while self._tray is not None:
                 _time.sleep(60)
                 try:
+                    today = date.today()
+
+                    # Day rollover: switch to new plan file at midnight
+                    if today != self._current_date:
+                        logger.info(
+                            "Day changed from %s to %s, reloading plan",
+                            self._current_date,
+                            today,
+                        )
+                        self._current_date = today
+                        new_path = self._get_today_plan_path()
+                        new_path.parent.mkdir(parents=True, exist_ok=True)
+                        if self.watcher:
+                            self.watcher.update_path(new_path)
+                        self._load_plan()
+                        continue
+
+                    # Detect plan file appearance (belt-and-suspenders)
+                    if self.plan is None:
+                        plan_path = self._get_today_plan_path()
+                        if plan_path.exists():
+                            logger.info("Plan file appeared, loading...")
+                            self._load_plan()
+                            continue
+
                     self._update_tray()
                 except Exception:
                     pass

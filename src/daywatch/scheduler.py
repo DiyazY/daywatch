@@ -86,16 +86,25 @@ class Scheduler:
                 continue
 
             block_start = _time_to_datetime(block.start, now)
+            now_time = now.time()
 
-            # Schedule "coming up" notification
+            # Case 1: Block is currently active (app started mid-block)
+            if block.start <= now_time < block.end:
+                timer = threading.Timer(0.1, self._fire_active_notification, args=(block,))
+                timer.daemon = True
+                timer.start()
+                self._timers.append(timer)
+                scheduled += 1
+                logger.debug("Immediate active notification for '%s'", block.label)
+                continue  # No need to schedule lead/start for an active block
+
+            # Case 2+3: Block hasn't started yet — schedule lead + start
             lead_time = block_start - timedelta(minutes=self.lead_time_minutes)
-            if lead_time > now:
+
+            if lead_time >= now:
+                # Normal future lead notification
                 delay = (lead_time - now).total_seconds()
-                timer = threading.Timer(
-                    delay,
-                    self._fire_lead_notification,
-                    args=(block,),
-                )
+                timer = threading.Timer(delay, self._fire_lead_notification, args=(block,))
                 timer.daemon = True
                 timer.start()
                 self._timers.append(timer)
@@ -105,15 +114,22 @@ class Scheduler:
                     block.label,
                     delay,
                 )
+            elif lead_time < now < block_start:
+                # Lead time passed but block not started — fire immediately
+                timer = threading.Timer(0.1, self._fire_lead_notification, args=(block,))
+                timer.daemon = True
+                timer.start()
+                self._timers.append(timer)
+                scheduled += 1
+                logger.debug(
+                    "Immediate lead notification for '%s' (lead time passed)",
+                    block.label,
+                )
 
             # Schedule "now starting" notification
-            if self.notify_on_start and block_start > now:
+            if self.notify_on_start and block_start >= now:
                 delay = (block_start - now).total_seconds()
-                timer = threading.Timer(
-                    delay,
-                    self._fire_start_notification,
-                    args=(block,),
-                )
+                timer = threading.Timer(delay, self._fire_start_notification, args=(block,))
                 timer.daemon = True
                 timer.start()
                 self._timers.append(timer)
@@ -156,6 +172,15 @@ class Scheduler:
         end_str = block.end.strftime("%H:%M")
         title = f"▶ Now: {block.label}"
         message = f"{start_str} – {end_str}"
+        logger.info("Notification: %s", title)
+        self._on_notification(title, message)
+
+    def _fire_active_notification(self, block: TimeBlock) -> None:
+        """Fire notification for a block that is currently active (app started mid-block)."""
+        start_str = block.start.strftime("%H:%M")
+        end_str = block.end.strftime("%H:%M")
+        title = f"▶ Active: {block.label}"
+        message = f"{start_str} – {end_str} (in progress)"
         logger.info("Notification: %s", title)
         self._on_notification(title, message)
 

@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Callable
 
-from watchdog.events import FileModifiedEvent, FileSystemEventHandler
+from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 logger = logging.getLogger(__name__)
@@ -24,13 +24,19 @@ class PlanFileHandler(FileSystemEventHandler):
         self.watch_path = watch_path.resolve()
         self.on_change = on_change
 
-    def on_modified(self, event: FileModifiedEvent) -> None:  # type: ignore[override]
+    def _handle_event(self, event) -> None:
         if event.is_directory:
             return
         changed = Path(event.src_path).resolve()
         if changed == self.watch_path:
             logger.info("Plan file changed: %s", changed)
             self.on_change(changed)
+
+    def on_modified(self, event: FileModifiedEvent) -> None:  # type: ignore[override]
+        self._handle_event(event)
+
+    def on_created(self, event: FileCreatedEvent) -> None:  # type: ignore[override]
+        self._handle_event(event)
 
 
 class PlanWatcher:
