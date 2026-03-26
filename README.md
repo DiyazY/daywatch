@@ -125,6 +125,7 @@ daywatch new monthly      # Current month
 daywatch new yearly       # Current year
 daywatch config           # Open config file in $EDITOR
 daywatch status           # One-line progress (for scripts/status bars)
+daywatch test-notification # Send a test notification to verify setup
 ```
 
 ## Plan Format
@@ -162,6 +163,23 @@ Templates support these variables:
 | `{DD}`      | 24        | Zero-padded day     |
 | `{WEEKDAY}` | Tuesday   | Full weekday name   |
 | `{WW}`      | 13        | ISO week number     |
+
+## Notification Setup
+
+After installing, run the test command to verify notifications work and register DayWatch with your OS:
+
+```bash
+daywatch test-notification
+```
+
+**macOS:** Notifications appear under **Script Editor** (or **Python** if running from source) in System Settings → Notifications. Make sure:
+- Allow Notifications is **ON**
+- Alert style is set to **Banners** or **Alerts** (not "None")
+- If using Focus Mode, add the app under allowed notifications
+
+**Linux:** Requires a notification daemon (e.g., dunst, mako, notify-osd).
+
+**Windows:** Notifications should work out of the box. Check Settings → System → Notifications if they don't appear.
 
 ## Configuration
 

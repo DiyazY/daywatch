@@ -195,5 +195,27 @@ def status(ctx: click.Context) -> None:
     click.echo(format_status_line(plan))
 
 
+@main.command("test-notification")
+def test_notification() -> None:
+    """Send a test notification to verify system permissions.
+
+    Use this after installation to ensure notifications are working
+    and to register DayWatch in your OS notification settings.
+    """
+    from daywatch.scheduler import _send_notification
+
+    click.echo("Sending test notification...")
+    _send_notification(
+        title="✅ DayWatch — Test Notification",
+        message="Notifications are working! You can configure alerts in your system settings.",
+    )
+    click.echo("Done! If you didn't see a notification:")
+    click.echo()
+    click.echo("  macOS: System Settings → Notifications → look for 'Script Editor'")
+    click.echo("         or 'Python', and set Alert style to 'Alerts' or 'Banners'.")
+    click.echo("  Linux: Check that a notification daemon is running (dunst, mako, etc.).")
+    click.echo("  Windows: Settings → System → Notifications → ensure they're enabled.")
+
+
 if __name__ == "__main__":
     main()
