@@ -31,3 +31,5 @@ config.toml
 .pytest_cache/
 .coverage
 htmlcov/
+
+.serena
