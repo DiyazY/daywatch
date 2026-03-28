@@ -138,9 +138,7 @@ class Scheduler:
                 block_key = f"{block.start}-{block.label}"
                 if block_key not in self._notified_active:
                     self._notified_active.add(block_key)
-                    timer = threading.Timer(
-                        0.1, self._fire_active_notification, args=(block,)
-                    )
+                    timer = threading.Timer(0.1, self._fire_active_notification, args=(block,))
                     timer.daemon = True
                     timer.start()
                     self._timers.append(timer)
