@@ -104,6 +104,7 @@ class Scheduler:
         self.sound = sound
         self._timers: list[threading.Timer] = []
         self._muted_blocks: set[str] = set()  # Labels of muted blocks
+        self._notified_active: set[str] = set()  # Block keys already notified as active
         # Optional callback for custom notification handling (e.g., UI updates)
         self._on_notification = on_notification or _send_notification
 
@@ -134,12 +135,19 @@ class Scheduler:
 
             # Case 1: Block is currently active (app started mid-block)
             if block.start <= now_time < block.end:
-                timer = threading.Timer(0.1, self._fire_active_notification, args=(block,))
-                timer.daemon = True
-                timer.start()
-                self._timers.append(timer)
-                scheduled += 1
-                logger.debug("Immediate active notification for '%s'", block.label)
+                block_key = f"{block.start}-{block.label}"
+                if block_key not in self._notified_active:
+                    self._notified_active.add(block_key)
+                    timer = threading.Timer(
+                        0.1, self._fire_active_notification, args=(block,)
+                    )
+                    timer.daemon = True
+                    timer.start()
+                    self._timers.append(timer)
+                    scheduled += 1
+                    logger.debug("Immediate active notification for '%s'", block.label)
+                else:
+                    logger.debug("Skipped duplicate active notification for '%s'", block.label)
                 continue  # No need to schedule lead/start for an active block
 
             # Case 2+3: Block hasn't started yet — schedule lead + start

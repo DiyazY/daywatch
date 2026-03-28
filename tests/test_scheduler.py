@@ -277,6 +277,35 @@ class TestScheduler:
         assert "Now" not in notifications[0][0]
         scheduler.cancel_all()
 
+    def test_active_notification_not_repeated_on_reload(self):
+        """Reloading the plan should not re-fire the active block notification."""
+        import time as _time
+
+        notifications = []
+
+        def capture(title, message):
+            notifications.append((title, message))
+
+        now = datetime.now()
+        start = (now - timedelta(minutes=15)).time()
+        end = (now + timedelta(minutes=45)).time()
+
+        plan = _make_plan([_block(start.hour, start.minute, end.hour, end.minute, "task")])
+
+        scheduler = Scheduler(lead_time_minutes=5, on_notification=capture)
+        scheduler.update(plan)
+        _time.sleep(0.3)
+
+        assert len(notifications) == 1
+
+        # Simulate file edit → reload
+        scheduler.update(plan)
+        _time.sleep(0.3)
+
+        # Should still be 1, not 2
+        assert len(notifications) == 1
+        scheduler.cancel_all()
+
     def test_completed_active_block_skipped(self):
         """A block that is active in time but marked completed gets no notifications."""
         now = datetime.now()
