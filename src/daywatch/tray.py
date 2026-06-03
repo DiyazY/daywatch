@@ -24,20 +24,40 @@ logger = logging.getLogger(__name__)
 # Icon dimensions
 ICON_SIZE = 64
 
+# Error-state messages surfaced in the tray menu/tooltip. The full, actionable
+# remediation goes to the log; these are the short forms that fit a tray UI.
+_ERR_PERMISSION = "Can't read plan file"
+_ERR_PERMISSION_HINT = "Grant Full Disk Access & restart"
+_ERR_PARSE = "Couldn't parse plan file"
+_ERR_PARSE_HINT = "See logs for details"
 
-def _create_icon(progress: float = 0.0, active: bool = False, no_plan: bool = False) -> Image:
+
+def _create_icon(
+    progress: float = 0.0,
+    active: bool = False,
+    no_plan: bool = False,
+    error: bool = False,
+) -> Image:
     """Generate a tray icon dynamically based on state.
 
     Args:
         progress: Completion fraction (0.0 to 1.0) for the progress ring.
         active: Whether there's an active block (changes accent color).
         no_plan: Whether no plan file was found (grey icon with ?).
+        error: Whether the plan file exists but couldn't be read (red icon with !).
 
     Returns:
         A PIL Image suitable for use as a tray icon.
     """
     img = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
+
+    if error:
+        # Red circle with "!" — the file is present but unreadable. Distinct from
+        # the grey "?" so an access problem doesn't look like a missing plan.
+        draw.ellipse([4, 4, 60, 60], fill=(220, 38, 38, 220))
+        draw.text((26, 14), "!", fill=(255, 255, 255, 255))
+        return img
 
     if no_plan:
         # Grey circle with "?"
@@ -69,6 +89,9 @@ class DayWatchTray:
     def __init__(self, config: Config | None = None) -> None:
         self.config = config or load_config()
         self.plan: DailyPlan | None = None
+        # Distinct from ``plan is None``: the file exists but couldn't be read/parsed.
+        self.error: str | None = None
+        self.error_hint: str | None = None
         self._current_date: date = date.today()
         self.scheduler = Scheduler(
             lead_time_minutes=self.config.notifications.lead_time_minutes,
@@ -83,6 +106,26 @@ class DayWatchTray:
         today = date.today()
         return self.config.resolve_daily_plan_path(today.year, today.month, today.day)
 
+    def _set_error(self, summary: str, hint: str | None, detail: str) -> None:
+        """Enter an error state, surface it in the tray, and log ``detail`` once.
+
+        The previously loaded plan (if any) is intentionally left untouched so a
+        transient read failure doesn't wipe a good plan. ``detail`` (the full,
+        actionable remediation) is logged only when the error first appears or
+        changes, so the 60s refresh loop doesn't flood the log with duplicates.
+        """
+        is_new = self.error != summary
+        self.error = summary
+        self.error_hint = hint
+        if is_new:
+            logger.error("%s", detail)
+        self._update_tray()
+
+    def _clear_error(self) -> None:
+        """Leave the error state (called when the file is absent or loads cleanly)."""
+        self.error = None
+        self.error_hint = None
+
     def _load_plan(self, path: Path | None = None) -> None:
         """Load (or reload) the daily plan."""
         if path is None:
@@ -91,21 +134,35 @@ class DayWatchTray:
         if not path.exists():
             logger.warning("Plan file not found: %s", path)
             self.plan = None
+            self._clear_error()
             self._update_tray()
             return
 
         try:
-            self.plan = parse_file(path)
-            logger.info(
-                "Loaded plan for %s: %d blocks, %d%% done",
-                self.plan.date,
-                len(self.plan.blocks),
-                self.plan.progress_percent,
+            plan = parse_file(path)
+        except PermissionError as e:
+            self._set_error(
+                _ERR_PERMISSION,
+                _ERR_PERMISSION_HINT,
+                f"Permission denied reading plan file: {path}. Grant Full Disk Access "
+                "to the app you launch DayWatch from (System Settings → Privacy & "
+                f"Security → Full Disk Access), then quit and reopen it. ({e})",
             )
-            self.scheduler.update(self.plan)
-            self._update_tray()
+            return
         except Exception as e:
-            logger.error("Failed to parse plan: %s", e)
+            self._set_error(_ERR_PARSE, _ERR_PARSE_HINT, f"Failed to parse plan {path}: {e}")
+            return
+
+        self.plan = plan
+        self._clear_error()
+        logger.info(
+            "Loaded plan for %s: %d blocks, %d%% done",
+            plan.date,
+            len(plan.blocks),
+            plan.progress_percent,
+        )
+        self.scheduler.update(plan)
+        self._update_tray()
 
     def _on_file_change(self, path: Path) -> None:
         """Callback when the plan file changes."""
@@ -117,6 +174,12 @@ class DayWatchTray:
         import pystray
 
         items = []
+
+        if self.error is not None:
+            items.append(pystray.MenuItem(f"⚠️ {self.error}", None, enabled=False))
+            if self.error_hint:
+                items.append(pystray.MenuItem(self.error_hint, None, enabled=False))
+            items.append(pystray.Menu.SEPARATOR)
 
         if self.plan and self.plan.blocks:
             # Header: date + progress
@@ -132,7 +195,9 @@ class DayWatchTray:
                 items.append(pystray.MenuItem(line, None, enabled=False))
 
             items.append(pystray.Menu.SEPARATOR)
-        else:
+        elif self.error is None:
+            # Only claim "no plan" when there genuinely isn't one — not when the
+            # file exists but we couldn't read it (that's shown as a warning above).
             items.append(pystray.MenuItem("No plan for today", None, enabled=False))
             items.append(pystray.Menu.SEPARATOR)
 
@@ -148,11 +213,19 @@ class DayWatchTray:
             return
 
         now = datetime.now().time()
-        if self.plan is None:
+        if self.error is not None:
+            self._tray.icon = _create_icon(error=True)
+            tooltip = f"DayWatch — {self.error}"
+            if self.error_hint:
+                tooltip += f" ({self.error_hint})"
+            self._tray.title = tooltip
+        elif self.plan is None:
             self._tray.icon = _create_icon(no_plan=True)
+            self._tray.title = "DayWatch"
         else:
             active = self.plan.current_block(now) is not None
             self._tray.icon = _create_icon(progress=self.plan.progress, active=active)
+            self._tray.title = "DayWatch"
 
         self._tray.menu = self._build_menu()
 
