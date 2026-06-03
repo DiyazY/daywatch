@@ -204,6 +204,28 @@ theme = "auto"
 launch_at_login = false
 ```
 
+## Troubleshooting
+
+### macOS: tray shows a red **!** / "Can't read plan file" (iCloud & protected folders)
+
+If your plans live in iCloud Drive (`~/Library/Mobile Documents/…`, e.g. an Obsidian vault) or another macOS-protected location (Desktop, Documents, Downloads), DayWatch may be unable to read them. The tray shows a red **!** icon and a *"Can't read plan file"* warning, and the log contains:
+
+```
+Permission denied reading plan file: …/2026-06-02.md ([Errno 1] Operation not permitted)
+```
+
+This is macOS privacy protection (TCC), not a corrupt file — the app that launches DayWatch hasn't been granted access to that folder. Grant **Full Disk Access** to whichever app starts DayWatch:
+
+1. Open **System Settings → Privacy & Security → Full Disk Access**.
+2. Add the launching app and toggle it **on**: your terminal (Terminal, iTerm, …) when running from source, or `daywatch` itself if you run the packaged binary.
+3. **Quit and reopen** that app — TCC grants only apply to newly launched processes — then start DayWatch again.
+
+To confirm the grant worked, read the file from the same app before launching the tray:
+
+```bash
+python3 -c "from pathlib import Path; print(Path('PATH/TO/your-plan.md').read_text()[:40])"
+```
+
 ## Development
 
 ```bash
