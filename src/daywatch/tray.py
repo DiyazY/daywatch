@@ -10,6 +10,7 @@ import logging
 import threading
 from datetime import date, datetime
 from pathlib import Path
+from typing import NamedTuple
 
 from PIL import Image, ImageDraw
 
@@ -24,12 +25,22 @@ logger = logging.getLogger(__name__)
 # Icon dimensions
 ICON_SIZE = 64
 
-# Error-state messages surfaced in the tray menu/tooltip. The full, actionable
-# remediation goes to the log; these are the short forms that fit a tray UI.
-_ERR_PERMISSION = "Can't read plan file"
-_ERR_PERMISSION_HINT = "Grant Full Disk Access & restart"
-_ERR_PARSE = "Couldn't parse plan file"
-_ERR_PARSE_HINT = "See logs for details"
+
+class _ErrorState(NamedTuple):
+    """A tray error: a short summary plus a one-line remediation hint.
+
+    Both fit a tray UI and are surfaced in the menu/tooltip; the full, actionable
+    remediation goes to the log. Pairing them keeps each error kind a single
+    source of truth instead of two constants that must be kept in lockstep.
+    """
+
+    summary: str
+    hint: str
+
+
+# Error states surfaced in the tray. The verbose remediation is logged separately.
+_ERR_PERMISSION = _ErrorState("Can't read plan file", "Grant Full Disk Access & restart")
+_ERR_PARSE = _ErrorState("Couldn't parse plan file", "See logs for details")
 
 
 def _create_icon(
@@ -90,8 +101,7 @@ class DayWatchTray:
         self.config = config or load_config()
         self.plan: DailyPlan | None = None
         # Distinct from ``plan is None``: the file exists but couldn't be read/parsed.
-        self.error: str | None = None
-        self.error_hint: str | None = None
+        self.error: _ErrorState | None = None
         self._current_date: date = date.today()
         self.scheduler = Scheduler(
             lead_time_minutes=self.config.notifications.lead_time_minutes,
@@ -106,7 +116,7 @@ class DayWatchTray:
         today = date.today()
         return self.config.resolve_daily_plan_path(today.year, today.month, today.day)
 
-    def _set_error(self, summary: str, hint: str | None, detail: str) -> None:
+    def _set_error(self, error: _ErrorState, detail: str) -> None:
         """Enter an error state, surface it in the tray, and log ``detail`` once.
 
         The previously loaded plan (if any) is intentionally left untouched so a
@@ -114,9 +124,8 @@ class DayWatchTray:
         actionable remediation) is logged only when the error first appears or
         changes, so the 60s refresh loop doesn't flood the log with duplicates.
         """
-        is_new = self.error != summary
-        self.error = summary
-        self.error_hint = hint
+        is_new = self.error != error
+        self.error = error
         if is_new:
             logger.error("%s", detail)
         self._update_tray()
@@ -124,7 +133,6 @@ class DayWatchTray:
     def _clear_error(self) -> None:
         """Leave the error state (called when the file is absent or loads cleanly)."""
         self.error = None
-        self.error_hint = None
 
     def _load_plan(self, path: Path | None = None) -> None:
         """Load (or reload) the daily plan."""
@@ -143,14 +151,13 @@ class DayWatchTray:
         except PermissionError as e:
             self._set_error(
                 _ERR_PERMISSION,
-                _ERR_PERMISSION_HINT,
                 f"Permission denied reading plan file: {path}. Grant Full Disk Access "
                 "to the app you launch DayWatch from (System Settings → Privacy & "
                 f"Security → Full Disk Access), then quit and reopen it. ({e})",
             )
             return
         except Exception as e:
-            self._set_error(_ERR_PARSE, _ERR_PARSE_HINT, f"Failed to parse plan {path}: {e}")
+            self._set_error(_ERR_PARSE, f"Failed to parse plan {path}: {e}")
             return
 
         self.plan = plan
@@ -176,9 +183,9 @@ class DayWatchTray:
         items = []
 
         if self.error is not None:
-            items.append(pystray.MenuItem(f"⚠️ {self.error}", None, enabled=False))
-            if self.error_hint:
-                items.append(pystray.MenuItem(self.error_hint, None, enabled=False))
+            items.append(pystray.MenuItem(f"⚠️ {self.error.summary}", None, enabled=False))
+            if self.error.hint:
+                items.append(pystray.MenuItem(self.error.hint, None, enabled=False))
             items.append(pystray.Menu.SEPARATOR)
 
         if self.plan and self.plan.blocks:
@@ -212,20 +219,18 @@ class DayWatchTray:
         if self._tray is None:
             return
 
-        now = datetime.now().time()
+        self._tray.title = "DayWatch"
         if self.error is not None:
             self._tray.icon = _create_icon(error=True)
-            tooltip = f"DayWatch — {self.error}"
-            if self.error_hint:
-                tooltip += f" ({self.error_hint})"
-            self._tray.title = tooltip
+            self._tray.title = f"DayWatch — {self.error.summary}"
+            if self.error.hint:
+                self._tray.title += f" ({self.error.hint})"
         elif self.plan is None:
             self._tray.icon = _create_icon(no_plan=True)
-            self._tray.title = "DayWatch"
         else:
+            now = datetime.now().time()
             active = self.plan.current_block(now) is not None
             self._tray.icon = _create_icon(progress=self.plan.progress, active=active)
-            self._tray.title = "DayWatch"
 
         self._tray.menu = self._build_menu()
 
@@ -251,19 +256,11 @@ class DayWatchTray:
         self.watcher = PlanWatcher(plan_path, self._on_file_change)
         self.watcher.start()
 
-        # Create tray icon
-        icon_img = _create_icon(
-            progress=self.plan.progress if self.plan else 0.0,
-            active=False,
-            no_plan=self.plan is None,
-        )
-
-        self._tray = pystray.Icon(
-            name="daywatch",
-            icon=icon_img,
-            title="DayWatch",
-            menu=self._build_menu(),
-        )
+        # Create the tray, then reconcile its icon/title/menu through the single
+        # rendering path so the startup state — including an error from the initial
+        # load above — is reflected, without duplicating the state→icon mapping here.
+        self._tray = pystray.Icon(name="daywatch", icon=_create_icon(), title="DayWatch")
+        self._update_tray()
 
         # Periodic refresh (every 60s) to update active block highlighting
         def _periodic_refresh():
