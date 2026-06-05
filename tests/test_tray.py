@@ -14,7 +14,7 @@ import logging
 
 from daywatch.config import Config, VaultConfig
 from daywatch.scheduler import Scheduler
-from daywatch.tray import DayWatchTray, _create_icon
+from daywatch.tray import _ERR_PARSE, DayWatchTray, _create_icon
 
 VALID_PLAN = """\
 # Day Planner
@@ -59,13 +59,11 @@ def test_permission_error_sets_actionable_error(tmp_path, monkeypatch, caplog):
 def test_success_clears_previous_error(tmp_path):
     tray = make_tray(tmp_path)
     plan_file = write_plan(tmp_path)
-    tray.error = "stale error"
-    tray.error_hint = "stale hint"
+    tray.error = _ERR_PARSE  # pretend a prior load left the tray in an error state
 
     tray._load_plan(plan_file)
 
     assert tray.error is None
-    assert tray.error_hint is None
     assert tray.plan is not None
     assert len(tray.plan.blocks) == 2
 
@@ -100,9 +98,8 @@ def test_generic_parse_error_is_distinct_from_permission(tmp_path, monkeypatch, 
 
     assert tray.error is not None
     # Generic parse failures must NOT claim it's a permissions problem.
-    assert "Full Disk Access" not in tray.error
-    if tray.error_hint:
-        assert "Full Disk Access" not in tray.error_hint
+    assert "Full Disk Access" not in tray.error.summary
+    assert "Full Disk Access" not in tray.error.hint
 
 
 def test_permission_error_logged_once_across_repeats(tmp_path, monkeypatch, caplog):
